@@ -6,8 +6,10 @@ from folktables import ACSDataSource
 import numpy as np
 import pandas as pd
 from aif360.datasets import StandardDataset
+from aif360.algorithms.preprocessing import Reweighing
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
 
 #(Age) must be greater than 16 and less than 90, and (Person weight) must be greater than or equal to 1
 
@@ -59,14 +61,8 @@ favorable_classes = [True]
 protected_attribute_names = [ACSEmployment.group]
 privileged_classes = np.array([[1]])
 
-# Spec for Ai360
-data_for_aif = StandardDataset(data, 'label', favorable_classes = favorable_classes,
-protected_attribute_names = protected_attribute_names,
-privileged_classes = privileged_classes)
-privileged_groups = [{'DIS': 1}]
-unprivileged_groups = [{'DIS': 2}]
 
-def split_train_test_set(data, test_size=0.3):
+def split_train_test_set(features, label, test_size=0.3):
     """Splits the data into train and test sets based on split 
 
         Args:
@@ -76,9 +72,9 @@ def split_train_test_set(data, test_size=0.3):
             train (arr): Train numpy array
             test  (arr): Test numpy array  
     """ 
-    return train_test_split(data, test_size=test_size, shuffle=True)
+    return train_test_split(features, label, test_size=test_size, shuffle=True)
 
-def split_train_set(train, val_size=0.2, shuffle_train=False):
+def split_train_set(X_train, y_train, val_size=0.2, shuffle_train=False):
     """Splits train set into train-train and train-val sets
         
         Args:
@@ -92,18 +88,69 @@ def split_train_set(train, val_size=0.2, shuffle_train=False):
     """
 
     if shuffle_train:
-        train, test = split_train_test_set(train)
-        train_train, train_val = split_train_test_set(train, test_size=0.2)
+        X_train, X_test, y_train, y_test = split_train_test_set(X_train, y_train)
+        train_train, train_val = split_train_test_set(X_train, y_train, test_size=0.2)
         return train_train, train_val, test
-    return split_train_test_set(train, test_size=0.2)
+    return split_train_test_set(X_train, y_train, test_size=0.2)
 
 
 
-def test_logistic_regression()
+def get_most_accurate_model(X_train, y_train):
+    """Returns the most accurate model for diff train splits. Model - Log regression
 
-train_train, train_val, test = split_train_set(data, shuffle_train=True)
-for i in in range(5):
-    print("Seperate the test, train on train train train val, get the one with highest acc compute its fairness and then think about warying hyperparameter")
-    print("Then do the reweighing using fairness methods and repeat the procedure")
-    print("Then come up with some criterion for model selection based on results and reading and repeat")
-    print("Then repeat this on the Texas data")
+        Args: 
+            X_train (np.arr): Train Dataset Features
+            y_train (np.arr): Train Dataset Labels
+        Returns:
+            final_model (LogisticRegression()): Model that peforms the best on validation
+            max_accuracy (float): Maximum accuracy achieved
+    """
+
+    max_accuracy = 0.0
+    final_model = None
+
+    for i in range(5):
+        X_train_train, X_train_val, y_train_train, y_train_val = split_train_set(X_train, y_train)   
+        clf = LogisticRegression().fit(X=X_train_train, y=y_train_train)
+        accuracy = clf.score(X_train_val, y_train_val)
+        
+        if accuracy > max_accuracy:
+            final_model = clf
+            max_accuracy = accuracy
+
+    return clf, max_accuracy
+
+def get_fairness_score(model, X_test, y_test):
+
+    y_pred = model.predict(X_test)
+    tn, fp, fn, tp = confusion_matrix(y_test, y_pred, labels=[0, 1]).ravel()
+    return tp
+
+def get_metrics_for_data(features, label):
+    """Repeated Operations - need to optimize hyperparameter (whatever that means)"""
+
+    X_train, X_test, y_train, y_test = split_train_test_set(features, label)
+    model, max_accuracy = get_most_accurate_model(X_train, y_train)
+    accuracy = model.score(X_test, y_test)
+    print(f"Model score {model.score(X_test, y_test)}")
+    tp = get_fairness_score(model, X_test, y_test)/len([i for i in y_test if i ==1])
+    print(f"Model fairness {tp}")
+
+    return model, accuracy, tp
+
+model, accuracy, tp = get_metrics_for_data(features, label)
+
+# Spec for Ai360
+data_for_aif = StandardDataset(data, 'label', favorable_classes = favorable_classes,
+protected_attribute_names = protected_attribute_names,
+privileged_classes = privileged_classes)
+privileged_groups = [{'DIS': 1}]
+unprivileged_groups = [{'DIS': 2}]
+
+new_weights = Reweighing(unprivileged_groups, privileged_groups).transform(data_for_aif)
+df, df1 = new_weights.convert_to_dataframe()
+
+features = df.drop(['label'], axis=1).to_numpy()
+label = df['label'].to_numpy()
+
+model, accuracy, tp = get_metrics_for_data(features, label)
