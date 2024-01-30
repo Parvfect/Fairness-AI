@@ -1,5 +1,7 @@
 # Testing variation of Hyperparameter for Regression, reweighing using fairness methods and using appropiate model selection for the final model which is both accurate and fair
 
+# Colab please
+
 
 import folktables
 from folktables import ACSDataSource
