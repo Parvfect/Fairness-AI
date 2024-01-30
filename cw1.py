@@ -10,6 +10,7 @@ from aif360.algorithms.preprocessing import Reweighing
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
+from tune_hyperparameters import tune_hyperparameters
 
 #(Age) must be greater than 16 and less than 90, and (Person weight) must be greater than or equal to 1
 
@@ -111,8 +112,8 @@ def get_most_accurate_model(X_train, y_train):
 
     for i in range(5):
         X_train_train, X_train_val, y_train_train, y_train_val = split_train_set(X_train, y_train)   
-        clf = LogisticRegression().fit(X=X_train_train, y=y_train_train)
-        accuracy = clf.score(X_train_val, y_train_val)
+        model_params, accuracy = tune_hyperparameters(X=X_train_train, y=y_train_train, model=LogisticRegression())
+        clf = LogisticRegression(C=model_params['C'], penalty=model_params['penalty'], solver=model_params['solver']).fit(X=X_train_train, y=y_train_train)
         
         if accuracy > max_accuracy:
             final_model = clf
