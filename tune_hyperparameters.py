@@ -11,7 +11,7 @@ def tune_hyperparameters(X, y, model):
 
     solvers = ['lbfgs']
     penalty = ['l2']
-    c_values = [1000, 100, 10, 1.0, 0.1, 0.01]
+    c_values = [10, 1.0, 0.1, 0.01, 1e-3, 1e-5, 1e-5, 1e-6, 1e-7]
 
     # define grid search
     grid = dict(solver=solvers, penalty=penalty,C=c_values)
